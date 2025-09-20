@@ -1,5 +1,6 @@
 package com.aizuda.snailjob.client.core.intercepter;
 
+import cn.hutool.core.util.StrUtil;
 import com.aizuda.snailjob.common.core.constant.SystemConstants;
 import com.aizuda.snailjob.common.core.model.SnailJobHeaders;
 import com.aizuda.snailjob.common.core.util.JsonUtil;
@@ -37,13 +38,13 @@ public class SnailRetryHeaderAspect {
             return;
         }
 
-        String xRetry = attributes.getRequest().getHeader(SystemConstants.SNAIL_JOB_HEAD_KEY);
-        if (Objects.nonNull(xRetry)) {
+        String snailJobHeader = attributes.getRequest().getHeader(SystemConstants.SNAIL_JOB_HEAD_KEY);
+        if (StrUtil.isNotBlank(snailJobHeader)) {
             // 标记进入方法的时间
             RetrySiteSnapshot.setEntryMethodTime(System.currentTimeMillis());
 
-            SnailJobLog.LOCAL.info("snail retry request header :[{}]", xRetry);
-            RetrySiteSnapshot.setRetryHeader(JsonUtil.parseObject(xRetry, SnailJobHeaders.class));
+            SnailJobLog.LOCAL.info("snail retry request header :[{}]", snailJobHeader);
+            RetrySiteSnapshot.setRetryHeader(JsonUtil.parseObject(snailJobHeader, SnailJobHeaders.class));
         }
     }
 
