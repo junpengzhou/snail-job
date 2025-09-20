@@ -68,9 +68,11 @@ public abstract class AbstractConfigAccess<T> implements ConfigAccess<T> {
                 .in(RetrySceneConfig::getSceneName, sceneNames));
     }
 
-    protected List<RetrySceneConfig> getSceneConfigs(String groupName) {
+    protected List<RetrySceneConfig> getSceneConfigs(String groupName, String namespaceId) {
         return sceneConfigMapper.selectList(new LambdaQueryWrapper<RetrySceneConfig>()
-                .eq(RetrySceneConfig::getGroupName, groupName));
+                .eq(RetrySceneConfig::getGroupName, groupName)
+                .eq(RetrySceneConfig::getNamespaceId, namespaceId)
+        );
     }
 
     protected GroupConfig getByGroupName(String groupName, final String namespaceId) {
@@ -110,8 +112,8 @@ public abstract class AbstractConfigAccess<T> implements ConfigAccess<T> {
     }
 
     @Override
-    public List<RetrySceneConfig> getSceneConfigByGroupName(String groupName) {
-        return getSceneConfigs(groupName);
+    public List<RetrySceneConfig> getSceneConfigByGroupName(String groupName, String namespaceId) {
+        return getSceneConfigs(groupName, namespaceId);
     }
 
     @Override
@@ -192,14 +194,14 @@ public abstract class AbstractConfigAccess<T> implements ConfigAccess<T> {
             }
 
             String recipientIds = notifyConfig.getRecipientIds();
-            List<NotifyRecipient> notifyRecipients = notifyRecipientMapper.selectBatchIds(
+            List<NotifyRecipient> notifyRecipients = notifyRecipientMapper.selectByIds(
                     JsonUtil.parseList(recipientIds, Long.class));
             notifies.add(getNotify(notifyConfig, notifyRecipients, retryNotifyScene, jobNotifyScene));
         }
 
         configRequest.setNotifyList(notifies);
 
-        List<RetrySceneConfig> retrySceneConfig = getSceneConfigByGroupName(groupName);
+        List<RetrySceneConfig> retrySceneConfig = getSceneConfigByGroupName(groupName, namespaceId);
 
         List<ConfigRequest.Scene> sceneList = new ArrayList<>();
         for (RetrySceneConfig config : retrySceneConfig) {

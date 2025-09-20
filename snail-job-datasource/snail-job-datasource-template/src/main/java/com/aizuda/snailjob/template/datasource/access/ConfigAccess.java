@@ -62,7 +62,7 @@ public interface ConfigAccess<T> extends Access<T> {
      * @param groupName 组名称
      * @return {@link RetrySceneConfig} 场景配置
      */
-    List<RetrySceneConfig> getSceneConfigByGroupName(String groupName);
+    List<RetrySceneConfig> getSceneConfigByGroupName(String groupName,  String namespaceId);
 
     /**
      * 场景黑名单
