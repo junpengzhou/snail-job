@@ -3,17 +3,18 @@ package com.aizuda.snailjob.client.job.core.executor;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
 import com.aizuda.snailjob.client.common.rpc.client.RequestBuilder;
+import com.aizuda.snailjob.client.job.core.MapHandler;
 import com.aizuda.snailjob.client.job.core.client.JobNettyClient;
-import com.aizuda.snailjob.model.dto.ExecuteResult;
-import com.aizuda.snailjob.model.request.MapTaskRequest;
 import com.aizuda.snailjob.common.core.constant.SystemConstants;
 import com.aizuda.snailjob.common.core.enums.StatusEnum;
 import com.aizuda.snailjob.common.core.exception.SnailJobMapReduceException;
 import com.aizuda.snailjob.common.core.model.JobContext;
-import com.aizuda.snailjob.common.core.model.SnailJobRpcResult;
 import com.aizuda.snailjob.common.core.model.Result;
+import com.aizuda.snailjob.common.core.model.SnailJobRpcResult;
 import com.aizuda.snailjob.common.core.util.JsonUtil;
 import com.aizuda.snailjob.common.log.SnailJobLog;
+import com.aizuda.snailjob.model.dto.ExecuteResult;
+import com.aizuda.snailjob.model.request.MapTaskRequest;
 import org.springframework.util.CollectionUtils;
 
 import java.lang.reflect.InvocationHandler;
@@ -23,19 +24,22 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
+ * @version : sj_1.1.0
  * @author: opensnail
  * @date : 2024-06-26
- * @version : sj_1.1.0
  */
 public final class MapInvokeHandler implements InvocationHandler {
 
     private static final JobNettyClient CLIENT = RequestBuilder.<JobNettyClient, SnailJobRpcResult>newBuilder()
-        .client(JobNettyClient.class)
-        .async(Boolean.FALSE)
-        .build();
+            .client(JobNettyClient.class)
+            .async(Boolean.FALSE)
+            .build();
 
     @Override
     public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable {
+        if (!MapHandler.class.getDeclaredMethod("doMap", List.class, String.class).equals(method)) {
+            return method.invoke(this, args);
+        }
         return doMap((List<Object>) args[0], (String) args[1]);
     }
 
