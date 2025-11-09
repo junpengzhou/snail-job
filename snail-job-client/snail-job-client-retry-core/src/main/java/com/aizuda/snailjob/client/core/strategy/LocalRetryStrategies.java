@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * 执行本地重试
@@ -88,7 +89,7 @@ public class LocalRetryStrategies extends AbstractRetryStrategies {
     }
 
     @Override
-    public Consumer<Throwable> doGetRetryErrorConsumer(RetryerInfo retryerInfo, Object[] params) {
+    public Consumer<Throwable> doGetRetryErrorConsumer(RetryerInfo retryerInfo, Supplier<Object[]> paramsSupplier) {
         return throwable -> {
             // 执行上报服务端
             log.info("Memory retry completed but the exception was not resolved scene:[{}]", retryerInfo.getScene());
@@ -96,13 +97,13 @@ public class LocalRetryStrategies extends AbstractRetryStrategies {
             if (RetryType.LOCAL_REMOTE.name().equals(retryerInfo.getRetryType().name())) {
                 // 上报
                 log.debug("Report scene:[{}]", retryerInfo.getScene());
-                doReport(retryerInfo, params);
+                doReport(retryerInfo, paramsSupplier.get());
             }
         };
     }
 
     @Override
-    public Callable doGetCallable(RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Object... params) {
+    public Callable doGetCallable(RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Supplier<Object[]> paramsSupplier) {
 
         RetryerInfo retryerInfo = retryExecutor.getRetryerInfo();
         RetryType retryType = retryerInfo.getRetryType();
@@ -114,11 +115,11 @@ public class LocalRetryStrategies extends AbstractRetryStrategies {
                 // 标记进入方法的时间
                 RetrySiteSnapshot.setEntryMethodTime(System.currentTimeMillis());
 
-                return () -> retryExecutor.execute(params);
+                return () -> retryExecutor.execute(paramsSupplier.get());
             case ONLY_REMOTE:
                 // 仅仅是远程重试则直接上报
                 log.debug("Report scene:[{}]", retryerInfo.getScene());
-                doReport(retryerInfo, params);
+                doReport(retryerInfo, paramsSupplier.get());
                 RetrySiteSnapshot.setStage(RetrySiteSnapshot.EnumStage.REMOTE.getStage());
                 return () -> null;
             default:

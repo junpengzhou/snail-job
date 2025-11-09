@@ -1,5 +1,6 @@
 package com.aizuda.snailjob.client.core.intercepter;
 
+import com.aizuda.snailjob.client.core.RetryArgSerializer;
 import com.aizuda.snailjob.client.core.RetrySiteSnapshotContext;
 import com.aizuda.snailjob.client.core.exception.SnailRetryClientException;
 import com.aizuda.snailjob.client.core.loader.SnailRetrySpiLoader;
@@ -7,6 +8,7 @@ import com.aizuda.snailjob.common.core.constant.SystemConstants;
 import com.aizuda.snailjob.common.core.model.SnailJobHeaders;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import org.aopalliance.intercept.MethodInvocation;
 
 import java.util.*;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -22,6 +24,7 @@ public class RetrySiteSnapshot {
     private static final String RETRY_STAGE_KEY = "RETRY_STAGE";
     private static final String RETRY_CLASS_METHOD_ENTRANCE_KEY = "RETRY_CLASS_METHOD_ENTRANCE";
     private static final String RETRY_STATUS_KEY = "RETRY_STATUS";
+    private static final String RETRY_METHOD_PARAMS = "RETRY_METHOD_PARAMS";
 
     /**
      * 重试阶段，1-内存重试阶段，2-服务端重试阶段
@@ -96,6 +99,15 @@ public class RetrySiteSnapshot {
         return stack.peek().methodEntrance;
     }
 
+    public static Object[] getMethodParams(MethodInvocation methodInvocation) {
+        Deque<MethodEntranceMeta> stack = RETRY_CLASS_METHOD_ENTRANCE.get();
+        if (Objects.isNull(stack) || Objects.isNull(stack.peek())) {
+            return null;
+        }
+        RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer();
+        return (Object[]) retryArgSerializer.deSerialize(stack.peek().methodParams, methodInvocation.getClass(), methodInvocation.getMethod());
+    }
+
     public static boolean existedMethodEntrance() {
         Deque<MethodEntranceMeta> stack = RETRY_CLASS_METHOD_ENTRANCE.get();
         if (Objects.isNull(stack)) {
@@ -110,7 +122,7 @@ public class RetrySiteSnapshot {
         return Boolean.TRUE;
     }
 
-    public static void setMethodEntrance(String methodEntrance) {
+    public static void setMethodEntranceMeta(String methodEntrance, MethodInvocation methodInvocation) {
         Deque<MethodEntranceMeta> stack = RETRY_CLASS_METHOD_ENTRANCE.get();
         if (Objects.isNull(RETRY_CLASS_METHOD_ENTRANCE.get())) {
             stack = new LinkedBlockingDeque<>();
@@ -119,12 +131,13 @@ public class RetrySiteSnapshot {
 
         MethodEntranceMeta meta;
         if (!isRunning() && !isRetryFlow()) {
-            meta = new MethodEntranceMeta(methodEntrance);
+            RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer();
+            meta = new MethodEntranceMeta(methodEntrance, retryArgSerializer.serialize(methodInvocation.getArguments()));
             stack.push(meta);
         }
     }
 
-    public static void removeMethodEntrance() {
+    public static void removeMethodEntranceMeta() {
         Deque<MethodEntranceMeta> stack = RETRY_CLASS_METHOD_ENTRANCE.get();
         if (Objects.isNull(stack)) {
             return;
@@ -232,7 +245,7 @@ public class RetrySiteSnapshot {
         removeEntryMethodTime();
         removeRetryHeader();
         removeRetryStatusCode();
-        removeMethodEntrance();
+        removeMethodEntranceMeta();
     }
 
     /**
@@ -307,6 +320,8 @@ public class RetrySiteSnapshot {
 //        private AtomicInteger depth;
 
         private String methodEntrance;
+
+        private String methodParams;
     }
 
 }

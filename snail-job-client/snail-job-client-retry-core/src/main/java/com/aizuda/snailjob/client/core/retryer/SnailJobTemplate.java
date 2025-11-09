@@ -26,7 +26,7 @@ public class SnailJobTemplate implements RetryOperations {
 
         Integer stage = RetrySiteSnapshot.getStage();
         try {
-            retryStrategy.openRetry(scene, executorMethodClass.getName(), params);
+            retryStrategy.openRetry(scene, executorMethodClass.getName(), () -> params);
         } finally {
             // stage == null 则非嵌套重试, 需求清除线程记录的数据信息
             // stage != null 则由上层调度的进行清除线程记录的数据信息

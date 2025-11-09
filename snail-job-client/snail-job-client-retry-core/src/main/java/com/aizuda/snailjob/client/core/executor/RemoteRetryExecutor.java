@@ -48,7 +48,7 @@ public class RemoteRetryExecutor {
             initLogContext(context);
 
             RetryerResultContext retryerResultContext = remoteRetryStrategies.openRetry(context.getScene(),
-                    context.getExecutorName(), context.getDeSerialize());
+                    context.getExecutorName(), context::getDeSerialize);
 
             if (RetrySiteSnapshot.isRetryForStatusCode()) {
                 executeRespDto.setStatusCode(RetryResultStatusEnum.STOP.getStatus());

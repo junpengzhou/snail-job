@@ -85,10 +85,10 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
                     RetrySiteSnapshot.removeAll();
                 }
                 // 设置新的内容信息
-                RetrySiteSnapshot.setMethodEntrance(methodEntrance);
+                RetrySiteSnapshot.setMethodEntranceMeta(methodEntrance, invocation);
             }
         } else if (!RetrySiteSnapshot.existedMethodEntrance()) {
-            RetrySiteSnapshot.setMethodEntrance(methodEntrance);
+            RetrySiteSnapshot.setMethodEntranceMeta(methodEntrance, invocation);
         } else {
             SnailJobLog.LOCAL.debug("No need to set entrance signs:[{}]", traceId);
         }
@@ -225,7 +225,7 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
             initHeaders(retryable);
 
             RetryerResultContext context = retryStrategy.openRetry(retryable.scene(), executorClassName,
-                    point.getArguments());
+                    () -> RetrySiteSnapshot.getMethodParams(point));
             if (RetryResultStatusEnum.SUCCESS.getStatus().equals(context.getRetryResultStatusEnum().getStatus())) {
                 SnailJobLog.LOCAL.debug("local retry successful. traceId:[{}] result:[{}]", traceId,
                         context.getResult());

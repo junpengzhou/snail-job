@@ -33,6 +33,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static com.aizuda.snailjob.common.core.constant.SystemConstants.YYYY_MM_DD_HH_MM_SS;
 
@@ -59,7 +60,7 @@ public abstract class AbstractRetryStrategies implements RetryStrategy {
     private SnailJobProperties snailJobProperties;
 
     @Override
-    public RetryerResultContext openRetry(String sceneName, String executorClassName, Object[] params) {
+    public RetryerResultContext openRetry(String sceneName, String executorClassName, Supplier<Object[]> paramsSupplier) {
 
         RetryerResultContext retryerResultContext = new RetryerResultContext();
 
@@ -82,10 +83,10 @@ public abstract class AbstractRetryStrategies implements RetryStrategy {
 
         try {
             for (SnailJobListener snailJobListener : snailJobListeners) {
-                snailJobListener.beforeRetry(sceneName, executorClassName, params);
+                snailJobListener.beforeRetry(sceneName, executorClassName, paramsSupplier.get());
             }
 
-            Object result = retryExecutor.call(retryer, doGetCallable(retryExecutor, params), getRetryErrorConsumer(retryerResultContext, params), getRetrySuccessConsumer(retryerResultContext));
+            Object result = retryExecutor.call(retryer, doGetCallable(retryExecutor, paramsSupplier), getRetryErrorConsumer(retryerResultContext, paramsSupplier), getRetrySuccessConsumer(retryerResultContext));
             retryerResultContext.setResult(result);
 
         } catch (Exception e) {
@@ -125,7 +126,7 @@ public abstract class AbstractRetryStrategies implements RetryStrategy {
 
     protected abstract Consumer<Object> doRetrySuccessConsumer(RetryerResultContext context);
 
-    private Consumer<Throwable> getRetryErrorConsumer(RetryerResultContext context, Object... params) {
+    private Consumer<Throwable> getRetryErrorConsumer(RetryerResultContext context, Supplier<Object[]> paramsSupplier) {
         return throwable -> {
             context.setThrowable(throwable);
             context.setMessage(throwable.getMessage());
@@ -143,7 +144,7 @@ public abstract class AbstractRetryStrategies implements RetryStrategy {
                 throw e;
             }
 
-            doGetRetryErrorConsumer(retryerInfo, params).accept(throwable);
+            doGetRetryErrorConsumer(retryerInfo, paramsSupplier).accept(throwable);
 
         };
     }
@@ -156,9 +157,9 @@ public abstract class AbstractRetryStrategies implements RetryStrategy {
 
     protected abstract void success(RetryerResultContext retryerResultContext);
 
-    protected abstract Consumer<Throwable> doGetRetryErrorConsumer(RetryerInfo retryerInfo, Object[] params);
+    protected abstract Consumer<Throwable> doGetRetryErrorConsumer(RetryerInfo retryerInfo, Supplier<Object[]> paramsSupplier);
 
-    protected abstract Callable doGetCallable(RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Object[] params);
+    protected abstract Callable doGetCallable(RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Supplier<Object[]> paramsSupplier);
 
     protected abstract RetryExecutorParameter<WaitStrategy, StopStrategy> getRetryExecutorParameter(RetryerInfo retryerInfo);
 

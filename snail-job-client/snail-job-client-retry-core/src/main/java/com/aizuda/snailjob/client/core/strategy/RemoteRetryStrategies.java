@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * 执行远程重试
@@ -73,15 +74,15 @@ public class RemoteRetryStrategies extends AbstractRetryStrategies {
     }
 
     @Override
-    protected Consumer<Throwable> doGetRetryErrorConsumer(RetryerInfo retryerInfo, Object[] params) {
+    protected Consumer<Throwable> doGetRetryErrorConsumer(RetryerInfo retryerInfo, Supplier<Object[]> paramsSupplier) {
         return throwable -> {
             SnailJobLog.LOCAL.debug("RemoteRetryStrategies doGetRetryErrorConsumer ");
         };
     }
 
     @Override
-    protected Callable doGetCallable(RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Object... params) {
-        return () -> retryExecutor.execute(params);
+    protected Callable doGetCallable(RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Supplier<Object[]> paramsSupplier) {
+        return () -> retryExecutor.execute(paramsSupplier.get());
     }
 
     @Override

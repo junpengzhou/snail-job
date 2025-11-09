@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * 手动执行重试
@@ -72,16 +73,16 @@ public class ManualRetryStrategies extends AbstractRetryStrategies {
     }
 
     @Override
-    protected Consumer<Throwable> doGetRetryErrorConsumer(final RetryerInfo retryerInfo, final Object[] params) {
+    protected Consumer<Throwable> doGetRetryErrorConsumer(final RetryerInfo retryerInfo, Supplier<Object[]> paramsSupplier) {
         return throwable -> {
             SnailJobLog.LOCAL.debug("ManualRetryStrategies doGetRetryErrorConsumer ");
         };
     }
 
     @Override
-    protected Callable doGetCallable(final RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Object[] params) {
+    protected Callable doGetCallable(final RetryExecutor<WaitStrategy, StopStrategy> retryExecutor, Supplier<Object[]> paramsSupplier) {
         RetryerInfo retryerInfo = retryExecutor.getRetryerInfo();
-        return () -> doReport(retryerInfo, params);
+        return () -> doReport(retryerInfo, paramsSupplier.get());
 
     }
 
