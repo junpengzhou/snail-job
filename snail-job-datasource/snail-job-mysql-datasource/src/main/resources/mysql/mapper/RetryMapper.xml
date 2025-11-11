@@ -44,4 +44,29 @@
          WHERE rt.id = tt.id
     </update>
 
+    <update id="updateByIds">
+        UPDATE sj_retry rt,
+               (
+                   <foreach collection="list" item="item" index="index" separator="UNION ALL">
+                       SELECT
+                           #{item.id}               AS id,
+                           #{item.retryStatus}      AS retry_status,
+                           #{item.retryCount}       AS retry_count,
+                           #{item.nextTriggerAt}    AS next_trigger_at,
+                           #{item.bucketIndex}      AS bucket_index,
+                           #{item.taskType}         AS task_type,
+                           #{item.parentId}         AS parent_id,
+                           #{item.deleted}          AS deleted
+                   </foreach>
+               ) tt
+           SET rt.retry_status = IFNULL(tt.retry_status, rt.retry_status),
+               rt.retry_count = IFNULL(tt.retry_count, rt.retry_count),
+               rt.next_trigger_at = IFNULL(tt.next_trigger_at, rt.next_trigger_at),
+               rt.bucket_index = IFNULL(tt.bucket_index, rt.bucket_index),
+               rt.task_type = IFNULL(tt.task_type, rt.task_type),
+               rt.parent_id = IFNULL(tt.parent_id, rt.parent_id),
+               rt.deleted = IFNULL(tt.deleted, rt.deleted)
+         WHERE rt.id = tt.id
+    </update>
+
 </mapper>

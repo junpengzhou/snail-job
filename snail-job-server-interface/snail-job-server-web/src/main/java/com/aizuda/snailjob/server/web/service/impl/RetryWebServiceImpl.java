@@ -1,9 +1,12 @@
 package com.aizuda.snailjob.server.web.service.impl;
 
 import com.aizuda.snailjob.model.request.RetryTaskRequest;
+import com.aizuda.snailjob.model.request.base.StatusUpdateRequest;
+import com.aizuda.snailjob.server.common.WaitStrategy;
 import com.aizuda.snailjob.server.common.dto.InstanceLiveInfo;
 import com.aizuda.snailjob.server.common.dto.InstanceSelectCondition;
 import com.aizuda.snailjob.server.common.handler.InstanceManager;
+import com.aizuda.snailjob.server.common.strategy.WaitStrategies;
 import com.aizuda.snailjob.server.service.service.impl.AbstractRetryService;
 import lombok.RequiredArgsConstructor;
 import org.apache.pekko.actor.ActorRef;
@@ -57,8 +60,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static com.aizuda.snailjob.common.core.enums.RetryStatusEnum.ALLOW_DELETE_STATUS;
 
@@ -105,7 +110,7 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         if (CollUtil.isNotEmpty(ids)) {
             List<Retry> callbackTaskList = accessTemplate.getRetryAccess()
                     .list(new LambdaQueryWrapper<Retry>().in(Retry::getParentId, ids));
-           callbackMap = StreamUtils.toIdentityMap(callbackTaskList, Retry::getParentId);
+            callbackMap = StreamUtils.toIdentityMap(callbackTaskList, Retry::getParentId);
         }
 
         List<RetryResponseWebVO> retryResponseList = RetryTaskResponseVOConverter.INSTANCE.convertList(pageDTO.getRecords());
@@ -219,9 +224,9 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         // 根据重试数据id，更新执行器名称
         TaskAccess<Retry> retryTaskAccess = accessTemplate.getRetryAccess();
         return retryTaskAccess.update(retry, new LambdaUpdateWrapper<Retry>()
-                        .eq(Retry::getNamespaceId, namespaceId)
-                        .eq(Retry::getGroupName, requestVO.getGroupName())
-                        .in(Retry::getId, requestVO.getIds()));
+                .eq(Retry::getNamespaceId, namespaceId)
+                .eq(Retry::getGroupName, requestVO.getGroupName())
+                .in(Retry::getId, requestVO.getIds()));
     }
 
     @Override
@@ -231,10 +236,10 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
 
         List<Retry> retries = retryTaskAccess.list(new LambdaQueryWrapper<Retry>()
-                        .eq(Retry::getNamespaceId, namespaceId)
-                        .eq(Retry::getGroupName, requestVO.getGroupName())
-                        .in(Retry::getRetryStatus, ALLOW_DELETE_STATUS)
-                        .in(Retry::getId, requestVO.getIds())
+                .eq(Retry::getNamespaceId, namespaceId)
+                .eq(Retry::getGroupName, requestVO.getGroupName())
+                .in(Retry::getRetryStatus, ALLOW_DELETE_STATUS)
+                .in(Retry::getId, requestVO.getIds())
         );
 
         Assert.notEmpty(retries,
@@ -253,13 +258,68 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
                         .in(RetryTaskLogMessage::getRetryId, retryIds));
 
         Assert.isTrue(requestVO.getIds().size() == retryTaskAccess.delete(new LambdaQueryWrapper<Retry>()
-                                .eq(Retry::getNamespaceId, namespaceId)
-                                .eq(Retry::getGroupName, requestVO.getGroupName())
-                                .in(Retry::getRetryStatus, ALLOW_DELETE_STATUS)
-                                .in(Retry::getId, requestVO.getIds()))
+                        .eq(Retry::getNamespaceId, namespaceId)
+                        .eq(Retry::getGroupName, requestVO.getGroupName())
+                        .in(Retry::getRetryStatus, ALLOW_DELETE_STATUS)
+                        .in(Retry::getId, requestVO.getIds()))
                 , () -> new SnailJobServerException("Failed to delete retry task, please check if the task status is completed or at maximum attempts"));
 
         return Boolean.TRUE;
+    }
+
+    @Override
+    public boolean batchUpdateRetryStatus(BatchUpdateRetryStatusVO requestVO) {
+        TaskAccess<Retry> retryTaskAccess = accessTemplate.getRetryAccess();
+
+        List<Long> updateIdList = requestVO.getUpdateRequestList().stream().map(StatusUpdateRequest::getId).toList();
+
+        List<Retry> retryList = retryTaskAccess.list(new LambdaQueryWrapper<Retry>()
+                .eq(Retry::getNamespaceId, getNamespaceId())
+                .in(Retry::getId, updateIdList));
+
+        Map<Long, Retry> retryIdMap = retryList.stream().collect(Collectors.toMap(Retry::getId, Function.identity()));
+
+        List<Retry> updateList = new ArrayList<>();
+
+        for (StatusUpdateRequest requestDTO : requestVO.getUpdateRequestList()) {
+
+            RetryStatusEnum retryStatusEnum = RetryStatusEnum.getByStatus(requestDTO.getStatus());
+            if (Objects.isNull(retryStatusEnum)) {
+                throw new SnailJobServerException("Retry status error. [{}]", requestDTO.getStatus());
+            }
+
+            Retry retry = retryIdMap.get(requestDTO.getId());
+
+            if (Objects.isNull(retry)) {
+                throw new SnailJobServerException("Retry task not found");
+            }
+
+            retry.setRetryStatus(requestDTO.getStatus());
+
+            // 若恢复重试则需要重新计算下次触发时间
+            if (RetryStatusEnum.RUNNING.getStatus().equals(retryStatusEnum.getStatus())) {
+
+                RetrySceneConfig retrySceneConfig = accessTemplate.getSceneConfigAccess()
+                        .getSceneConfigByGroupNameAndSceneName(retry.getGroupName(), retry.getSceneName(), getNamespaceId());
+                WaitStrategies.WaitStrategyContext waitStrategyContext = new WaitStrategies.WaitStrategyContext();
+                waitStrategyContext.setNextTriggerAt(DateUtils.toNowMilli());
+                waitStrategyContext.setTriggerInterval(retrySceneConfig.getTriggerInterval());
+                waitStrategyContext.setDelayLevel(retry.getRetryCount() + 1);
+                WaitStrategy waitStrategy = WaitStrategies.WaitStrategyEnum.getWaitStrategy(retrySceneConfig.getBackOff());
+                retry.setNextTriggerAt(waitStrategy.computeTriggerTime(waitStrategyContext));
+                retry.setDeleted(0L);
+            }
+
+            if (RetryStatusEnum.FINISH.getStatus().equals(retryStatusEnum.getStatus())) {
+                retry.setDeleted(retry.getId());
+            }
+
+            retry.setUpdateDt(LocalDateTime.now());
+
+            updateList.add(retry);
+        }
+
+        return retryTaskAccess.updateByIds(updateList) == 1;
     }
 
     @Override
@@ -343,9 +403,9 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         List<Long> retryIds = requestVO.getRetryIds();
 
         List<Retry> list = accessTemplate.getRetryAccess().list(new LambdaQueryWrapper<Retry>()
-                        .eq(Retry::getNamespaceId, namespaceId)
-                        .eq(Retry::getTaskType, SyetemTaskTypeEnum.RETRY.getType())
-                        .in(Retry::getId, retryIds)
+                .eq(Retry::getNamespaceId, namespaceId)
+                .eq(Retry::getTaskType, SyetemTaskTypeEnum.RETRY.getType())
+                .in(Retry::getId, retryIds)
         );
         Assert.notEmpty(list, () -> new SnailJobServerException("No executable tasks"));
 

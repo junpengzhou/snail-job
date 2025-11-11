@@ -48,6 +48,15 @@ public interface RetryWebService {
     boolean batchDeleteRetry(BatchDeleteRetryTaskVO requestVO);
 
     /**
+     * 批量恢复重试数据
+     *
+     * @param requestVO 批量删除重试数据
+     * @return
+     */
+    boolean batchUpdateRetryStatus(BatchUpdateRetryStatusVO requestVO);
+
+
+    /**
      * 解析日志
      *
      * @param parseLogsVO {@link ParseLogsVO} 解析参数模型
