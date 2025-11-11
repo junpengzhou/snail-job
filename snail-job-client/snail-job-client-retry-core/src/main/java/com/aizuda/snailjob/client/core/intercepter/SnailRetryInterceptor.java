@@ -2,14 +2,17 @@ package com.aizuda.snailjob.client.core.intercepter;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.IdUtil;
-import cn.hutool.core.util.StrUtil;
 import com.aizuda.snailjob.client.common.cache.GroupVersionCache;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties;
 import com.aizuda.snailjob.client.core.MethodResult;
 import com.aizuda.snailjob.client.core.RetryCondition;
-import com.aizuda.snailjob.client.core.annotation.Propagation;
 import com.aizuda.snailjob.client.core.annotation.Retryable;
 import com.aizuda.snailjob.client.core.cache.RetryerInfoCache;
+import com.aizuda.snailjob.client.core.intercepter.RetrySiteSnapshot.DefaultMethodEntranceMeta;
+import com.aizuda.snailjob.client.core.intercepter.RetrySiteSnapshot.MethodEntranceMeta;
+import com.aizuda.snailjob.client.core.intercepter.RetrySiteSnapshot.ParamsCopyMethodEntranceMeta;
+import com.aizuda.snailjob.client.core.intercepter.RetrySiteSnapshot.ParamsReferenceMethodEntranceMeta;
+import com.aizuda.snailjob.client.core.retryer.MethodParamsType;
 import com.aizuda.snailjob.client.core.retryer.RetryerInfo;
 import com.aizuda.snailjob.client.core.retryer.RetryerResultContext;
 import com.aizuda.snailjob.client.core.strategy.RetryStrategy;
@@ -70,13 +73,12 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
         String traceId = UUID.randomUUID().toString();
 
         SnailJobLog.LOCAL.debug("Start entering the around method traceId:[{}]", traceId);
-        Retryable retryable = getAnnotationParameter(invocation.getMethod());
-        String executorClassName = invocation.getThis().getClass().getName();
-        String methodEntrance = getMethodEntrance(retryable, executorClassName);
 
-        if (Propagation.REQUIRES_NEW.equals(retryable.propagation())) {
+        MethodEntranceMeta methodEntranceMeta = buildMethodEntranceMeta(invocation);
+
+        if (methodEntranceMeta.isRequiresNew()) {
             // 如果已经是入口了就不需要继续添加入口了
-            if (!RetrySiteSnapshot.isMethodEntrance(methodEntrance)) {
+            if (!RetrySiteSnapshot.isMethodEntrance(methodEntranceMeta)) {
                 // 这里需要挂起外部重试的内存的信息
                 if (RetrySiteSnapshot.isRunning()
                         && RetrySiteSnapshot.getStage() == RetrySiteSnapshot.EnumStage.LOCAL.getStage()) {
@@ -85,10 +87,10 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
                     RetrySiteSnapshot.removeAll();
                 }
                 // 设置新的内容信息
-                RetrySiteSnapshot.setMethodEntranceMeta(methodEntrance, invocation);
+                RetrySiteSnapshot.setMethodEntranceMeta(methodEntranceMeta);
             }
         } else if (!RetrySiteSnapshot.existedMethodEntrance()) {
-            RetrySiteSnapshot.setMethodEntranceMeta(methodEntrance, invocation);
+            RetrySiteSnapshot.setMethodEntranceMeta(methodEntranceMeta);
         } else {
             SnailJobLog.LOCAL.debug("No need to set entrance signs:[{}]", traceId);
         }
@@ -103,10 +105,9 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
         } finally {
 
             SnailJobLog.LOCAL.debug("Start retrying. traceId:[{}] scene:[{}] executorClassName:[{}]", traceId,
-                    retryable.scene(), executorClassName);
+                    methodEntranceMeta.getRetryable().scene(), methodEntranceMeta.getExecutorClassName());
             // 入口则开始处理重试
-            retryerResultContext = doHandlerRetry(invocation, traceId, retryable, executorClassName, methodEntrance,
-                    throwable, result);
+            retryerResultContext = doHandlerRetry(traceId, methodEntranceMeta, throwable, result);
         }
 
         SnailJobLog.LOCAL.debug("Method return value is [{}]. traceId:[{}]", result, traceId, throwable);
@@ -119,13 +120,13 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
                 return retryerResultContext.getResult();
             }
             // 若注解配置了isThrowException=false 则不抛出异常, 必须存在异常的情况
-            else if (!retryable.isThrowException() && Objects.nonNull(throwable)) {
-                return retryFailHandle(invocation, retryable, executorClassName, throwable, traceId, retryerResultContext);
+            else if (!methodEntranceMeta.isThrowException() && Objects.nonNull(throwable)) {
+                return retryFailHandle(methodEntranceMeta, throwable, traceId, retryerResultContext);
             }
         }
 
         // 无需开启重试的场景，需要清除缓存信息
-        if ((RetrySiteSnapshot.isMethodEntrance(methodEntrance) && !RetrySiteSnapshot.isRunning())) {
+        if ((RetrySiteSnapshot.isMethodEntrance(methodEntranceMeta) && !RetrySiteSnapshot.isRunning())) {
             RetrySiteSnapshot.removeSuspend();
             RetrySiteSnapshot.removeAll();
         }
@@ -152,7 +153,11 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
         return false;
     }
 
-    private static Object retryFailHandle(MethodInvocation invocation, Retryable retryable, String executorClassName, Throwable throwable, String traceId, RetryerResultContext retryerResultContext) {
+    private static Object retryFailHandle(MethodEntranceMeta methodEntranceMeta, Throwable throwable, String traceId, RetryerResultContext retryerResultContext) {
+
+        MethodInvocation invocation = methodEntranceMeta.getMethodInvocation();
+        Retryable retryable = methodEntranceMeta.getRetryable();
+        String executorClassName = methodEntranceMeta.getExecutorClassName();
         Method method = invocation.getMethod();
 
         // 如果存在用户自定义MethodResult，返回用户自定义值
@@ -177,10 +182,12 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
         return retryerResultContext.getResult();
     }
 
-    private RetryerResultContext doHandlerRetry(MethodInvocation invocation, String traceId, Retryable retryable,
-                                                String executorClassName, String methodEntrance, Throwable throwable, Object result) {
+    private RetryerResultContext doHandlerRetry(String traceId, MethodEntranceMeta methodEntranceMeta, Throwable throwable, Object result) {
 
-        if (!RetrySiteSnapshot.isMethodEntrance(methodEntrance)
+        Retryable retryable = methodEntranceMeta.getRetryable();
+        String executorClassName = methodEntranceMeta.getExecutorClassName();
+
+        if (!RetrySiteSnapshot.isMethodEntrance(methodEntranceMeta)
                 || RetrySiteSnapshot.isRunning()
                 || (Objects.isNull(throwable) && !retryIfResult(result, retryable, traceId, executorClassName))
                 // 重试流量不开启重试
@@ -190,9 +197,9 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
                 // 匹配异常信息
                 || !retryIfException(throwable, RetryerInfoCache.get(retryable.scene(), executorClassName))
         ) {
-            if (!RetrySiteSnapshot.isMethodEntrance(methodEntrance)) {
+            if (!RetrySiteSnapshot.isMethodEntrance(methodEntranceMeta)) {
                 SnailJobLog.LOCAL.debug("Non-method entry does not enable local retries. traceId:[{}] [{}]", traceId,
-                        RetrySiteSnapshot.getMethodEntrance());
+                        methodEntranceMeta.getMethodEntrance());
             } else if (RetrySiteSnapshot.isRunning()) {
                 SnailJobLog.LOCAL.debug("Existing running retry tasks do not enable local retries. traceId:[{}] [{}]",
                         traceId, RetrySiteSnapshot.EnumStage.valueOfStage(RetrySiteSnapshot.getStage()));
@@ -213,19 +220,18 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
             return null;
         }
 
-        return openRetry(invocation, traceId, retryable, executorClassName, throwable);
+        return openRetry(traceId, methodEntranceMeta, throwable);
     }
 
-    private RetryerResultContext openRetry(MethodInvocation point, String traceId, Retryable retryable,
-                                           String executorClassName, Throwable throwable) {
+    private RetryerResultContext openRetry(String traceId, MethodEntranceMeta methodEntranceMeta, Throwable throwable) {
 
         try {
 
             // 标识重试流量
-            initHeaders(retryable);
+            initHeaders(methodEntranceMeta.getRetryable());
 
-            RetryerResultContext context = retryStrategy.openRetry(retryable.scene(), executorClassName,
-                    () -> RetrySiteSnapshot.getMethodParams(point));
+            RetryerResultContext context = retryStrategy.openRetry(methodEntranceMeta.getRetryable().scene(), methodEntranceMeta.getExecutorClassName(),
+                    methodEntranceMeta::getMethodParams);
             if (RetryResultStatusEnum.SUCCESS.getStatus().equals(context.getRetryResultStatusEnum().getStatus())) {
                 SnailJobLog.LOCAL.debug("local retry successful. traceId:[{}] result:[{}]", traceId,
                         context.getResult());
@@ -295,13 +301,19 @@ public class SnailRetryInterceptor implements MethodInterceptor, AfterAdvice, Se
 
     }
 
-    public String getMethodEntrance(Retryable retryable, String executorClassName) {
+    public MethodEntranceMeta buildMethodEntranceMeta(MethodInvocation invocation) {
+        Retryable retryable = getAnnotationParameter(invocation.getMethod());
 
-        if (Objects.isNull(retryable)) {
-            return StrUtil.EMPTY;
+        if (retryable != null) {
+            MethodParamsType methodParamsType = retryable.methodParamsStrategy();
+            if (methodParamsType == MethodParamsType.REFERENCE) {
+                return new ParamsReferenceMethodEntranceMeta(invocation);
+            } else if (methodParamsType == MethodParamsType.DEEP_COPY) {
+                return new ParamsCopyMethodEntranceMeta(invocation);
+            }
         }
 
-        return retryable.scene().concat("_").concat(executorClassName);
+        return new DefaultMethodEntranceMeta(invocation);
     }
 
     private Retryable getAnnotationParameter(Method method) {

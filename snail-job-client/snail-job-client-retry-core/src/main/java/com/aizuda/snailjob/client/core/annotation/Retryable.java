@@ -21,6 +21,7 @@ import com.aizuda.snailjob.client.core.RetryCondition;
 import com.aizuda.snailjob.client.core.callback.complete.RetryCompleteCallback;
 import com.aizuda.snailjob.client.core.callback.complete.SimpleRetryCompleteCallback;
 import com.aizuda.snailjob.client.core.generator.SimpleIdempotentIdGenerate;
+import com.aizuda.snailjob.client.core.retryer.MethodParamsType;
 import com.aizuda.snailjob.client.core.retryer.RetryType;
 import com.aizuda.snailjob.client.core.strategy.ExecutorAnnotationMethod;
 import com.aizuda.snailjob.client.core.strategy.ExecutorMethod;
@@ -156,5 +157,11 @@ public @interface Retryable {
      * @return RetryCondition
      */
     Class<? extends RetryCondition> retryIfResult() default RetryCondition.NoRetry.class;
+
+    /**
+     * 重试方法参数执行策略
+     */
+    MethodParamsType methodParamsStrategy() default MethodParamsType.REFERENCE;
+
 }
 
