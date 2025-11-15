@@ -29,6 +29,10 @@
 # 预览地址
  https://snailjob.opensnail.com/docs/preview.html
 
+# 企业版预览地址
+https://snailjob.opensnail.com/docs/guide/pro/introduction.html#%E4%BD%93%E9%AA%8C%E5%9C%B0%E5%9D%80
+
+
 ## 特别用户
 <a href="http://aizuda.com/?from=mp" >
   <img alt="snail-job-Logo" src="doc/images/aizuda.png" width="200px">
