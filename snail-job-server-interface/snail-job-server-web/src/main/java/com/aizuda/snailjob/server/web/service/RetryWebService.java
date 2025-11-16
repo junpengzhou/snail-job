@@ -53,7 +53,7 @@ public interface RetryWebService {
      * @param requestVO 批量删除重试数据
      * @return
      */
-    boolean batchUpdateRetryStatus(BatchUpdateRetryStatusVO requestVO);
+    Integer batchUpdateRetryStatus(BatchUpdateRetryStatusVO requestVO);
 
 
     /**

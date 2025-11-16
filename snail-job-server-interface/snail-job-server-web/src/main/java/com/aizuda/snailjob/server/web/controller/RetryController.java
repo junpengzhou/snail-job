@@ -73,7 +73,7 @@ public class RetryController {
 
     @LoginRequired
     @PutMapping("/batchUpdateRetryStatus")
-    public boolean batchUpdateRetryStatus(@RequestBody @Validated BatchUpdateRetryStatusVO requestVO) {
+    public Integer batchUpdateRetryStatus(@RequestBody @Validated BatchUpdateRetryStatusVO requestVO) {
         return retryWebService.batchUpdateRetryStatus(requestVO);
     }
 

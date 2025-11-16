@@ -20,8 +20,6 @@ public interface TaskAccess<T> extends Access<T> {
 
     int update(T t, LambdaUpdateWrapper<T> query);
 
-    int updateByIds(List<T> list);
-
     int updateById(T t);
 
     int delete(LambdaQueryWrapper<T> query);

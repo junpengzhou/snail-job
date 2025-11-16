@@ -268,58 +268,29 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
     }
 
     @Override
-    public boolean batchUpdateRetryStatus(BatchUpdateRetryStatusVO requestVO) {
+    public Integer batchUpdateRetryStatus(final BatchUpdateRetryStatusVO requestVO) {
+        Assert.notNull(requestVO.getRetryStatus());
+        Assert.notNull(requestVO.getStatus());
         TaskAccess<Retry> retryTaskAccess = accessTemplate.getRetryAccess();
-
-        List<Long> updateIdList = requestVO.getUpdateRequestList().stream().map(StatusUpdateRequest::getId).toList();
-
-        List<Retry> retryList = retryTaskAccess.list(new LambdaQueryWrapper<Retry>()
-                .eq(Retry::getNamespaceId, getNamespaceId())
-                .in(Retry::getId, updateIdList));
-
-        Map<Long, Retry> retryIdMap = retryList.stream().collect(Collectors.toMap(Retry::getId, Function.identity()));
-
-        List<Retry> updateList = new ArrayList<>();
-
-        for (StatusUpdateRequest requestDTO : requestVO.getUpdateRequestList()) {
-
-            RetryStatusEnum retryStatusEnum = RetryStatusEnum.getByStatus(requestDTO.getStatus());
-            if (Objects.isNull(retryStatusEnum)) {
-                throw new SnailJobServerException("Retry status error. [{}]", requestDTO.getStatus());
-            }
-
-            Retry retry = retryIdMap.get(requestDTO.getId());
-
-            if (Objects.isNull(retry)) {
-                throw new SnailJobServerException("Retry task not found");
-            }
-
-            retry.setRetryStatus(requestDTO.getStatus());
-
-            // 若恢复重试则需要重新计算下次触发时间
-            if (RetryStatusEnum.RUNNING.getStatus().equals(retryStatusEnum.getStatus())) {
-
-                RetrySceneConfig retrySceneConfig = accessTemplate.getSceneConfigAccess()
-                        .getSceneConfigByGroupNameAndSceneName(retry.getGroupName(), retry.getSceneName(), getNamespaceId());
-                WaitStrategies.WaitStrategyContext waitStrategyContext = new WaitStrategies.WaitStrategyContext();
-                waitStrategyContext.setNextTriggerAt(DateUtils.toNowMilli());
-                waitStrategyContext.setTriggerInterval(retrySceneConfig.getTriggerInterval());
-                waitStrategyContext.setDelayLevel(retry.getRetryCount() + 1);
-                WaitStrategy waitStrategy = WaitStrategies.WaitStrategyEnum.getWaitStrategy(retrySceneConfig.getBackOff());
-                retry.setNextTriggerAt(waitStrategy.computeTriggerTime(waitStrategyContext));
-                retry.setDeleted(0L);
-            }
-
-            if (RetryStatusEnum.FINISH.getStatus().equals(retryStatusEnum.getStatus())) {
-                retry.setDeleted(retry.getId());
-            }
-
-            retry.setUpdateDt(LocalDateTime.now());
-
-            updateList.add(retry);
+        Retry retry = new Retry();
+        retry.setUpdateDt(LocalDateTime.now());
+        retry.setRetryStatus(requestVO.getStatus());
+        LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = new LambdaUpdateWrapper<>();
+        retryLambdaUpdateWrapper.eq(Retry::getRetryStatus, requestVO.getRetryStatus());
+        if (StrUtil.isNotBlank(requestVO.getGroupName())) {
+            retryLambdaUpdateWrapper.eq(Retry::getRetryStatus, requestVO.getRetryStatus());
         }
-
-        return retryTaskAccess.updateByIds(updateList) == 1;
+        if (StrUtil.isNotBlank(requestVO.getSceneName())) {
+            retryLambdaUpdateWrapper.eq(Retry::getSceneName, requestVO.getSceneName());
+        }
+        if (StrUtil.isNotBlank(requestVO.getIdempotentId())) {
+            retryLambdaUpdateWrapper.eq(Retry::getIdempotentId, requestVO.getIdempotentId());
+        }
+        if (StrUtil.isNotBlank(requestVO.getBizNo())) {
+            retryLambdaUpdateWrapper.eq(Retry::getBizNo, requestVO.getBizNo());
+        }
+        int updated = retryTaskAccess.update(retry, retryLambdaUpdateWrapper);
+        return updated;
     }
 
     @Override

@@ -38,11 +38,6 @@ public class RetryAccess extends AbstractTaskAccess<Retry> {
     }
 
     @Override
-    public int updateByIds(List<Retry> retry) {
-        return retryMapper.updateByIds(retry);
-    }
-
-    @Override
     protected int doInsertBatch(List<Retry> list) {
         return retryMapper.insertBatch(list);
     }

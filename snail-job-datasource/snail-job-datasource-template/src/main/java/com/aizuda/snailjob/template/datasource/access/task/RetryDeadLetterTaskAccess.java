@@ -75,9 +75,4 @@ public class RetryDeadLetterTaskAccess extends AbstractTaskAccess<RetryDeadLette
     protected List<RetryDeadLetter> doList(LambdaQueryWrapper<RetryDeadLetter> query) {
         return retryDeadLetterMapper.selectList(query);
     }
-
-    @Override
-    public int updateByIds(List<RetryDeadLetter> retryDeadLetter) {
-        throw new UnsupportedOperationException();
-    }
 }

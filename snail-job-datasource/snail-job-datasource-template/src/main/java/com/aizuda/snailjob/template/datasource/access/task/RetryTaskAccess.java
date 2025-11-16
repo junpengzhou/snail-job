@@ -76,9 +76,4 @@ public class RetryTaskAccess extends AbstractTaskAccess<Retry> {
     protected List<Retry> doList(LambdaQueryWrapper<Retry> query) {
         return retryMapper.selectList(query);
     }
-
-    @Override
-    public int updateByIds(List<Retry> retry) {
-        throw new UnsupportedOperationException();
-    }
 }
