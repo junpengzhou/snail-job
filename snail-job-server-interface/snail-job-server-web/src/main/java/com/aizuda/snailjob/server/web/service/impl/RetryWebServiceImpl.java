@@ -1,13 +1,13 @@
 package com.aizuda.snailjob.server.web.service.impl;
 
 import com.aizuda.snailjob.model.request.RetryTaskRequest;
-import com.aizuda.snailjob.model.request.base.StatusUpdateRequest;
-import com.aizuda.snailjob.server.common.WaitStrategy;
 import com.aizuda.snailjob.server.common.dto.InstanceLiveInfo;
 import com.aizuda.snailjob.server.common.dto.InstanceSelectCondition;
 import com.aizuda.snailjob.server.common.handler.InstanceManager;
-import com.aizuda.snailjob.server.common.strategy.WaitStrategies;
 import com.aizuda.snailjob.server.service.service.impl.AbstractRetryService;
+import com.aizuda.snailjob.server.web.model.dto.RetryQueryOrUpdateDTO;
+import com.aizuda.snailjob.server.web.service.convert.RetryQueryOrUpdateDTOConverter;
+import com.baomidou.mybatisplus.core.conditions.AbstractLambdaWrapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.pekko.actor.ActorRef;
 import cn.hutool.core.collection.CollUtil;
@@ -82,22 +82,26 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
     private final TransactionTemplate transactionTemplate;
     private final InstanceManager instanceManager;
 
+    private static <T extends AbstractLambdaWrapper<Retry, T>> T buildQueryOrUpdateCondition(T abstractLambdaWrapper, RetryQueryOrUpdateDTO dto) {
+        String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
+        List<String> groupNames = UserSessionUtils.getGroupNames(dto.getGroupName());
+        abstractLambdaWrapper.eq(Retry::getNamespaceId, namespaceId)
+                .in(CollUtil.isNotEmpty(groupNames), Retry::getGroupName, groupNames)
+                .eq(StrUtil.isNotBlank(dto.getSceneName()), Retry::getSceneName, dto.getSceneName())
+                .eq(StrUtil.isNotBlank(dto.getBizNo()), Retry::getBizNo, dto.getBizNo())
+                .eq(StrUtil.isNotBlank(dto.getIdempotentId()), Retry::getIdempotentId, dto.getIdempotentId())
+                .eq(Objects.nonNull(dto.getRetryStatus()), Retry::getRetryStatus, dto.getRetryStatus())
+                .eq(Retry::getTaskType, SyetemTaskTypeEnum.RETRY.getType());
+        return abstractLambdaWrapper;
+    }
+
     @Override
     public PageResult<List<RetryResponseWebVO>> getRetryPage(RetryQueryVO queryVO) {
 
         PageDTO<Retry> pageDTO = new PageDTO<>(queryVO.getPage(), queryVO.getSize());
-        String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
-        List<String> groupNames = UserSessionUtils.getGroupNames(queryVO.getGroupName());
 
-        LambdaQueryWrapper<Retry> queryWrapper = new LambdaQueryWrapper<Retry>()
-                .eq(Retry::getNamespaceId, namespaceId)
-                .in(CollUtil.isNotEmpty(groupNames), Retry::getGroupName, groupNames)
-                .eq(StrUtil.isNotBlank(queryVO.getSceneName()), Retry::getSceneName, queryVO.getSceneName())
-                .eq(StrUtil.isNotBlank(queryVO.getBizNo()), Retry::getBizNo, queryVO.getBizNo())
-                .eq(StrUtil.isNotBlank(queryVO.getIdempotentId()), Retry::getIdempotentId, queryVO.getIdempotentId())
+        LambdaQueryWrapper<Retry> queryWrapper = buildQueryOrUpdateCondition(new LambdaQueryWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(queryVO))
                 .eq(Objects.nonNull(queryVO.getRetryId()), Retry::getId, queryVO.getRetryId())
-                .eq(Objects.nonNull(queryVO.getRetryStatus()), Retry::getRetryStatus, queryVO.getRetryStatus())
-                .eq(Retry::getTaskType, SyetemTaskTypeEnum.RETRY.getType())
                 .select(Retry::getId, Retry::getBizNo, Retry::getIdempotentId,
                         Retry::getGroupName, Retry::getNextTriggerAt, Retry::getRetryCount,
                         Retry::getRetryStatus, Retry::getUpdateDt, Retry::getCreateDt, Retry::getSceneName,
@@ -275,22 +279,8 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         Retry retry = new Retry();
         retry.setUpdateDt(LocalDateTime.now());
         retry.setRetryStatus(requestVO.getStatus());
-        LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = new LambdaUpdateWrapper<>();
-        retryLambdaUpdateWrapper.eq(Retry::getRetryStatus, requestVO.getRetryStatus());
-        if (StrUtil.isNotBlank(requestVO.getGroupName())) {
-            retryLambdaUpdateWrapper.eq(Retry::getRetryStatus, requestVO.getRetryStatus());
-        }
-        if (StrUtil.isNotBlank(requestVO.getSceneName())) {
-            retryLambdaUpdateWrapper.eq(Retry::getSceneName, requestVO.getSceneName());
-        }
-        if (StrUtil.isNotBlank(requestVO.getIdempotentId())) {
-            retryLambdaUpdateWrapper.eq(Retry::getIdempotentId, requestVO.getIdempotentId());
-        }
-        if (StrUtil.isNotBlank(requestVO.getBizNo())) {
-            retryLambdaUpdateWrapper.eq(Retry::getBizNo, requestVO.getBizNo());
-        }
-        int updated = retryTaskAccess.update(retry, retryLambdaUpdateWrapper);
-        return updated;
+        LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaUpdateWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
+        return retryTaskAccess.update(retry, retryLambdaUpdateWrapper);
     }
 
     @Override
