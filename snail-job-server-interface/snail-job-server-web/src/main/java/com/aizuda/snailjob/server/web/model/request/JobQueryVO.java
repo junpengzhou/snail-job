@@ -15,6 +15,6 @@ public class JobQueryVO extends BaseQueryDTO {
     private String groupName;
     private String jobName;
     private Integer jobStatus;
-    private String ownerId;
+    private Long ownerId;
     private String executorInfo;
 }
