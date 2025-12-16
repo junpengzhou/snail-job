@@ -207,7 +207,7 @@ public abstract class AbstractJobService implements JobService {
             return true;
         }
         Job update = new Job();
-        if (StatusEnum.YES.getStatus().equals(job.getJobStatus())) {
+        if (StatusEnum.YES.getStatus().equals(requestDTO.getStatus())) {
             // 开启时重新计算调度时间
             update.setNextTriggerAt(JobKit.calculateNextTriggerAt(job.getTriggerType(), job.getTriggerInterval(), DateUtils.toNowMilli()));
         }
