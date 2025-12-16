@@ -5,7 +5,7 @@ import com.aizuda.snailjob.client.common.config.SnailJobProperties;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties.RpcServerProperties;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties.ThreadPoolConfig;
 import com.aizuda.snailjob.client.common.exception.SnailJobClientException;
-import com.aizuda.snailjob.client.common.rpc.client.grpc.GrpcChannel;
+import com.aizuda.snailjob.client.common.rpc.client.common.ClientInfo;
 import com.aizuda.snailjob.client.common.rpc.supports.handler.SnailDispatcherRequestHandler;
 import com.aizuda.snailjob.client.common.rpc.supports.handler.grpc.UnaryRequestHandler;
 import com.aizuda.snailjob.common.core.constant.GrpcServerConstants;
@@ -64,7 +64,7 @@ public class SnailGrpcServer implements Lifecycle {
 
         final MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
         addServices(handlerRegistry, new GrpcInterceptor());
-        NettyServerBuilder builder = NettyServerBuilder.forPort(GrpcChannel.getClientPort())
+        NettyServerBuilder builder = NettyServerBuilder.forPort(ClientInfo.getClientPort())
             .executor(createGrpcExecutor(grpc.getDispatcherTp()));
 
         Duration keepAliveTime = grpc.getKeepAliveTime();

@@ -5,6 +5,7 @@ import com.aizuda.snailjob.client.common.config.SnailJobProperties;
 import com.aizuda.snailjob.client.core.IdempotentIdGenerate;
 import com.aizuda.snailjob.client.core.Report;
 import com.aizuda.snailjob.client.core.RetryArgSerializer;
+import com.aizuda.snailjob.client.core.cache.ExpressionEngineCache;
 import com.aizuda.snailjob.client.core.cache.RetryerInfoCache;
 import com.aizuda.snailjob.client.core.exception.SnailRetryClientException;
 import com.aizuda.snailjob.client.core.intercepter.RetrySiteSnapshot;
@@ -85,7 +86,7 @@ public abstract class AbstractReport implements Report {
         retryTaskRequest.setSerializerName(retryArgSerializer.name());
 
         String expression = retryerInfo.getBizNo();
-        ExpressionEngine expressionEngine = SnailRetrySpiLoader.loadExpressionEngine();
+        ExpressionEngine expressionEngine = ExpressionEngineCache.expressionEngine();
         retryTaskRequest.setBizNo((String) expressionEngine.eval(expression, args, executorMethod));
         return retryTaskRequest;
     }

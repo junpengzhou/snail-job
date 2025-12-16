@@ -10,6 +10,7 @@ import com.aizuda.snailjob.client.common.rpc.client.RequestMethod;
 import com.aizuda.snailjob.client.core.IdempotentIdGenerate;
 import com.aizuda.snailjob.client.core.RetryArgSerializer;
 import com.aizuda.snailjob.client.core.cache.FutureCache;
+import com.aizuda.snailjob.client.core.cache.RetryArgSerializerCache;
 import com.aizuda.snailjob.client.core.cache.RetryerInfoCache;
 import com.aizuda.snailjob.client.core.callback.future.CallbackTaskExecutorFutureCallback;
 import com.aizuda.snailjob.client.core.callback.future.RetryTaskExecutorFutureCallback;
@@ -19,7 +20,6 @@ import com.aizuda.snailjob.client.core.exception.RetryArgSerializeException;
 import com.aizuda.snailjob.client.core.exception.SnailRetryClientException;
 import com.aizuda.snailjob.client.core.executor.RemoteCallbackExecutor;
 import com.aizuda.snailjob.client.core.executor.RemoteRetryExecutor;
-import com.aizuda.snailjob.client.core.loader.SnailRetrySpiLoader;
 import com.aizuda.snailjob.client.core.log.RetryLogMeta;
 import com.aizuda.snailjob.client.core.retryer.RetryerInfo;
 import com.aizuda.snailjob.client.core.timer.StopTaskTimerTask;
@@ -86,7 +86,7 @@ public class SnailRetryEndPoint implements Lifecycle {
         // 初始化实时日志上下文
         initLogContext(retryContext);
 
-        RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer(request.getSerializerName());
+        RetryArgSerializer retryArgSerializer = RetryArgSerializerCache.retryArgSerializer(request.getSerializerName());
 
         Object[] deSerialize;
         try {
@@ -148,7 +148,7 @@ public class SnailRetryEndPoint implements Lifecycle {
                 return new Result<>(0, "Callback failed", Boolean.FALSE);
             }
 
-            RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer(callbackDTO.getSerializerName());
+            RetryArgSerializer retryArgSerializer = RetryArgSerializerCache.retryArgSerializer(callbackDTO.getSerializerName());
 
             Object[] deSerialize = (Object[]) retryArgSerializer.deSerialize(callbackDTO.getArgsStr(),
                     retryerInfo.getExecutor().getClass(), retryerInfo.getMethod());
@@ -217,7 +217,7 @@ public class SnailRetryEndPoint implements Lifecycle {
 
         Method executorMethod = retryerInfo.getMethod();
 
-        RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer(request.getSerializerName());
+        RetryArgSerializer retryArgSerializer = RetryArgSerializerCache.retryArgSerializer(request.getSerializerName());
 
         Object[] deSerialize;
         try {
@@ -250,7 +250,7 @@ public class SnailRetryEndPoint implements Lifecycle {
         String argsStr = retryDeserializeRequest.getArgsStr();
 
         RetryerInfo retryerInfo = RetryerInfoCache.get(scene, executorName);
-        RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer(retryDeserializeRequest.getSerializerName());
+        RetryArgSerializer retryArgSerializer = RetryArgSerializerCache.retryArgSerializer(retryDeserializeRequest.getSerializerName());
 
         Object result;
         try {

@@ -8,6 +8,7 @@ import com.aizuda.snailjob.client.common.config.SnailJobProperties;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties.RpcClientProperties;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties.ThreadPoolConfig;
 import com.aizuda.snailjob.client.common.exception.SnailJobClientTimeOutException;
+import com.aizuda.snailjob.client.common.rpc.client.common.ClientInfo;
 import com.aizuda.snailjob.common.core.context.SnailSpringContext;
 import com.aizuda.snailjob.common.core.enums.StatusEnum;
 import com.aizuda.snailjob.common.core.grpc.auto.GrpcResult;
@@ -142,7 +143,7 @@ public class GrpcClientInvokeHandler<R> implements InvocationHandler {
     protected static ThreadPoolExecutor createGrpcExecutor() {
         SnailJobProperties snailJobProperties = SnailSpringContext.getBean(SnailJobProperties.class);
         RpcClientProperties clientRpc = snailJobProperties.getClientRpc();
-        String serverIp = GrpcChannel.getServerHost().replaceAll("%", "-");
+        String serverIp = ClientInfo.getServerHost().replaceAll("%", "-");
         ThreadPoolConfig threadPool = clientRpc.getClientTp();
         ThreadPoolExecutor grpcExecutor = new ThreadPoolExecutor(threadPool.getCorePoolSize(),
             threadPool.getMaximumPoolSize(), threadPool.getKeepAliveTime(), TimeUnit.MILLISECONDS,

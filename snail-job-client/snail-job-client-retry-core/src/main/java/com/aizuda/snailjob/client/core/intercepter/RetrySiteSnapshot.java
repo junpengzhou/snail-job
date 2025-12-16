@@ -4,6 +4,7 @@ import com.aizuda.snailjob.client.core.RetryArgSerializer;
 import com.aizuda.snailjob.client.core.RetrySiteSnapshotContext;
 import com.aizuda.snailjob.client.core.annotation.Propagation;
 import com.aizuda.snailjob.client.core.annotation.Retryable;
+import com.aizuda.snailjob.client.core.cache.RetryArgSerializerCache;
 import com.aizuda.snailjob.client.core.exception.SnailRetryClientException;
 import com.aizuda.snailjob.client.core.loader.SnailRetrySpiLoader;
 import com.aizuda.snailjob.common.core.constant.SystemConstants;
@@ -437,13 +438,13 @@ public class RetrySiteSnapshot {
 
             super(methodInvocation);
 
-            RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer();
+            RetryArgSerializer retryArgSerializer = RetryArgSerializerCache.retryArgSerializer();
             this.methodParamsStr = retryArgSerializer.serialize(methodInvocation.getArguments());
         }
 
         @Override
         public Object[] getMethodParams() {
-            RetryArgSerializer retryArgSerializer = SnailRetrySpiLoader.loadRetryArgSerializer();
+            RetryArgSerializer retryArgSerializer = RetryArgSerializerCache.retryArgSerializer();
             return (Object[]) retryArgSerializer.deSerialize(methodParamsStr, getMethodInvocation().getClass(), getMethodInvocation().getMethod());
         }
     }

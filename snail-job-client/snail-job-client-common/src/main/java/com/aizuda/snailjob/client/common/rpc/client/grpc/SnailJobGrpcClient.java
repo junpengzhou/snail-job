@@ -4,8 +4,7 @@ import com.aizuda.snailjob.client.common.Lifecycle;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties.RpcClientProperties;
 import com.aizuda.snailjob.client.common.config.SnailJobProperties.ThreadPoolConfig;
-import com.aizuda.snailjob.client.common.event.SnailChannelReconnectEvent;
-import com.aizuda.snailjob.common.core.context.SnailSpringContext;
+import com.aizuda.snailjob.client.common.rpc.client.common.ClientInfo;
 import com.aizuda.snailjob.common.core.enums.RpcTypeEnum;
 import com.aizuda.snailjob.common.log.SnailJobLog;
 import com.google.common.collect.Sets;
@@ -79,8 +78,8 @@ public class SnailJobGrpcClient implements Lifecycle {
     public ManagedChannel connection() {
         RpcClientProperties clientRpc = snailJobProperties.getClientRpc();
         // 创建 gRPC 频道
-        String serverHost = GrpcChannel.getServerHost();
-        return NettyChannelBuilder.forAddress(serverHost, GrpcChannel.getServerPort())
+        String serverHost = ClientInfo.getServerHost();
+        return NettyChannelBuilder.forAddress(serverHost, ClientInfo.getServerPort())
                 .executor(createGrpcExecutor(serverHost))
                 .decompressorRegistry(DecompressorRegistry.getDefaultInstance())
                 .maxInboundMessageSize(clientRpc.getMaxInboundMessageSize())

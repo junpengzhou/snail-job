@@ -9,7 +9,6 @@ import com.aizuda.snailjob.client.core.event.SnailJobListener;
 import com.aizuda.snailjob.client.core.expression.ExpressionInvocationHandler;
 import com.aizuda.snailjob.client.core.intercepter.ThreadLockRetrySiteSnapshotContext;
 import com.aizuda.snailjob.client.core.serializer.ForySerializer;
-import com.aizuda.snailjob.client.core.serializer.FurySerializer;
 import com.aizuda.snailjob.client.core.serializer.JacksonSerializer;
 import com.aizuda.snailjob.common.core.expression.ExpressionEngine;
 import com.aizuda.snailjob.common.core.expression.ExpressionFactory;
