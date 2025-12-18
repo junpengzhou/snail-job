@@ -26,6 +26,12 @@ public class MapAddHandler extends AddHandler<MapAddHandler> {
     }
 
     @Override
+    public MapAddHandler setRouteKey(AllocationAlgorithmEnum algorithmEnum) {
+        super.setRouteKey(algorithmEnum);
+        return this;
+    }
+
+    @Override
     public MapAddHandler setParallelNum(Integer parallelNum) {
         return super.setParallelNum(parallelNum);
     }

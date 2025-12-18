@@ -32,6 +32,12 @@ public class MapReduceAddHandler extends AddHandler<MapReduceAddHandler> {
     }
 
     @Override
+    public MapReduceAddHandler setRouteKey(AllocationAlgorithmEnum algorithmEnum) {
+        super.setRouteKey(algorithmEnum);
+        return this;
+    }
+
+    @Override
     public MapReduceAddHandler setShardNum(Integer shardNum) {
         return super.setShardNum(shardNum);
     }

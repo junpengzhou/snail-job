@@ -183,13 +183,6 @@
                 <artifactId>mybatis-plus-jsqlparser</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
-
-            <!--    utils        -->
-<!--            <dependency>-->
-<!--                <groupId>io.netty</groupId>-->
-<!--                <artifactId>netty-all</artifactId>-->
-<!--                <version>${netty-all.version}</version>-->
-<!--            </dependency>-->
             <dependency>
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-bom</artifactId>
