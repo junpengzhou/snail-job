@@ -295,22 +295,23 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         Assert.notNull(requestVO.getStatus());
         TaskAccess<Retry> retryAccess = accessTemplate.getRetryAccess();
 
+        String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
+
+        String lockKey = MessageFormat.format(BATCH_UPDATE_RETRY_STATUS_LOCK_KEY, namespaceId, requestVO.getGroupName(), requestVO.getSceneName());
+        LockProvider lockProvider = LockBuilder.newBuilder()
+                .withDisposable(MD5.create().digestHex(lockKey))
+                .build();
+
+
+        int lockTime = 15;
+        boolean lock = lockProvider.lock(Duration.ofMinutes(lockTime));
+        if (!lock) {
+            throw new SnailJobServerException("Failed to batch update retry status, failed to acquire distributed lock. groupName:[{}] sceneName:[{}] Another operation may be in progress, please try again later",
+                    requestVO.getGroupName(), requestVO.getSceneName());
+        }
+
         // 若恢复重试则需要重新计算下次触发时间
         if (RetryStatusEnum.RUNNING.getStatus().equals(requestVO.getStatus())) {
-
-            String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
-
-            String lockKey = MessageFormat.format(BATCH_UPDATE_RETRY_STATUS_LOCK_KEY, namespaceId, requestVO.getGroupName(), requestVO.getSceneName());
-            LockProvider lockProvider = LockBuilder.newBuilder()
-                    .withDisposable(MD5.create().digestHex(lockKey))
-                    .build();
-
-            boolean lock = lockProvider.lock(Duration.ofMinutes(15));
-            if (!lock) {
-                throw new SnailJobServerException("Failed to batch update retry status, failed to acquire distributed lock. groupName:[{}] sceneName:[{}] Another operation may be in progress, please try again later",
-                        requestVO.getGroupName(), requestVO.getSceneName());
-            }
-
             LockConfig lockConfig = LockManager.getLockConfig();
             PageDTO<Retry> pageDTO = new PageDTO<>(0, 1000);
             LambdaQueryWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaQueryWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
@@ -344,13 +345,17 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
 
             thread.start();
 
-            return 0;
+            return lockTime;
         } else {
-            Retry retry = new Retry();
-            retry.setUpdateDt(LocalDateTime.now());
-            retry.setRetryStatus(requestVO.getStatus());
-            LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaUpdateWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
-            return retryAccess.update(retry, retryLambdaUpdateWrapper);
+            try {
+                Retry retry = new Retry();
+                retry.setUpdateDt(LocalDateTime.now());
+                retry.setRetryStatus(requestVO.getStatus());
+                LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaUpdateWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
+                return retryAccess.update(retry, retryLambdaUpdateWrapper);
+            } finally {
+                lockProvider.unlock();
+            }
         }
     }
 
