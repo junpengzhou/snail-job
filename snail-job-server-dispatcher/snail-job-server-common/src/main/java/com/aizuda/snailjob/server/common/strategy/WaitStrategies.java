@@ -219,7 +219,7 @@ public class WaitStrategies {
         }
 
         public RandomWaitStrategy() {
-            this.minimum = 10;
+            this.minimum = 0;
         }
 
         @Override
@@ -234,7 +234,7 @@ public class WaitStrategies {
             Preconditions.checkArgument(maximum > minimum, "maximum must be > minimum but maximum is %d and minimum is", maximum, minimum);
 
             long t = Math.abs(RANDOM.nextLong()) % (maximum - minimum);
-            return (TimeUnit.SECONDS.toMillis(t + minimum) + DateUtils.toNowMilli());
+            return (t + minimum) + DateUtils.toNowMilli();
         }
     }
 

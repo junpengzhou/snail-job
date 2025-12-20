@@ -1,12 +1,23 @@
 package com.aizuda.snailjob.server.web.service.impl;
 
+import cn.hutool.crypto.digest.MD5;
 import com.aizuda.snailjob.model.request.RetryTaskRequest;
+import com.aizuda.snailjob.server.common.WaitStrategy;
 import com.aizuda.snailjob.server.common.dto.InstanceLiveInfo;
 import com.aizuda.snailjob.server.common.dto.InstanceSelectCondition;
+import com.aizuda.snailjob.server.common.dto.LockConfig;
+import com.aizuda.snailjob.server.common.dto.PartitionTask;
 import com.aizuda.snailjob.server.common.handler.InstanceManager;
+import com.aizuda.snailjob.server.common.lock.LockBuilder;
+import com.aizuda.snailjob.server.common.lock.LockManager;
+import com.aizuda.snailjob.server.common.lock.LockProvider;
+import com.aizuda.snailjob.server.common.strategy.WaitStrategies;
+import com.aizuda.snailjob.server.common.util.PartitionTaskUtils;
+import com.aizuda.snailjob.server.retry.task.support.RetryTaskConverter;
 import com.aizuda.snailjob.server.service.service.impl.AbstractRetryService;
 import com.aizuda.snailjob.server.web.model.dto.RetryQueryOrUpdateDTO;
 import com.aizuda.snailjob.server.web.service.convert.RetryQueryOrUpdateDTOConverter;
+import com.aizuda.snailjob.template.datasource.persistence.mapper.RetryMapper;
 import com.baomidou.mybatisplus.core.conditions.AbstractLambdaWrapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.pekko.actor.ActorRef;
@@ -53,6 +64,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.text.MessageFormat;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,10 +73,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static com.aizuda.snailjob.common.core.enums.RetryStatusEnum.ALLOW_DELETE_STATUS;
 
@@ -75,12 +87,16 @@ import static com.aizuda.snailjob.common.core.enums.RetryStatusEnum.ALLOW_DELETE
 @Service("retryWebCommonService")
 @RequiredArgsConstructor
 public class RetryWebServiceImpl extends AbstractRetryService implements RetryWebService {
+
+    private static final String BATCH_UPDATE_RETRY_STATUS_LOCK_KEY = "batch_update_retry_status_lock_{0}_{1}_{2}";
+
     private final RetryTaskMapper retryTaskMapper;
     private final AccessTemplate accessTemplate;
     private final List<TaskGenerator> taskGenerators;
     private final RetryTaskLogMessageMapper retryTaskLogMessageMapper;
     private final TransactionTemplate transactionTemplate;
     private final InstanceManager instanceManager;
+    private final RetryMapper retryMapper;
 
     private static <T extends AbstractLambdaWrapper<Retry, T>> T buildQueryOrUpdateCondition(T abstractLambdaWrapper, RetryQueryOrUpdateDTO dto) {
         String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
@@ -273,14 +289,69 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
 
     @Override
     public Integer batchUpdateRetryStatus(final BatchUpdateRetryStatusVO requestVO) {
+        Assert.notNull(requestVO.getSceneName());
+        Assert.notNull(requestVO.getGroupName());
         Assert.notNull(requestVO.getRetryStatus());
         Assert.notNull(requestVO.getStatus());
-        TaskAccess<Retry> retryTaskAccess = accessTemplate.getRetryAccess();
-        Retry retry = new Retry();
-        retry.setUpdateDt(LocalDateTime.now());
-        retry.setRetryStatus(requestVO.getStatus());
-        LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaUpdateWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
-        return retryTaskAccess.update(retry, retryLambdaUpdateWrapper);
+        TaskAccess<Retry> retryAccess = accessTemplate.getRetryAccess();
+
+        // 若恢复重试则需要重新计算下次触发时间
+        if (RetryStatusEnum.RUNNING.getStatus().equals(requestVO.getStatus())) {
+
+            String namespaceId = UserSessionUtils.currentUserSession().getNamespaceId();
+
+            String lockKey = MessageFormat.format(BATCH_UPDATE_RETRY_STATUS_LOCK_KEY, namespaceId, requestVO.getGroupName(), requestVO.getSceneName());
+            LockProvider lockProvider = LockBuilder.newBuilder()
+                    .withDisposable(MD5.create().digestHex(lockKey))
+                    .build();
+
+            boolean lock = lockProvider.lock(Duration.ofMinutes(15));
+            if (!lock) {
+                throw new SnailJobServerException("Failed to batch update retry status, failed to acquire distributed lock. groupName:[{}] sceneName:[{}] Another operation may be in progress, please try again later",
+                        requestVO.getGroupName(), requestVO.getSceneName());
+            }
+
+            LockConfig lockConfig = LockManager.getLockConfig();
+            PageDTO<Retry> pageDTO = new PageDTO<>(0, 1000);
+            LambdaQueryWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaQueryWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
+            retryLambdaUpdateWrapper.select(Retry::getId);
+            Thread thread = new Thread(() -> {
+                try {
+                    LockManager.initialize(lockConfig);
+                    PartitionTaskUtils.process(startId -> {
+                        retryLambdaUpdateWrapper.ge(Retry::getId, startId);
+                        PageDTO<Retry> retryPageDTO = retryAccess.listPage(pageDTO, retryLambdaUpdateWrapper);
+                        return RetryTaskConverter.INSTANCE.toRetryPartitionTasks(retryPageDTO.getRecords());
+                    }, retryPartitionTasks -> {
+                        List<Retry> retryList = new ArrayList<>();
+                        for (PartitionTask retryPartitionTask : retryPartitionTasks) {
+                            Retry retry = new Retry();
+                            retry.setId(retryPartitionTask.getId());
+                            retry.setUpdateDt(LocalDateTime.now());
+                            retry.setRetryStatus(requestVO.getStatus());
+                            WaitStrategies.WaitStrategyContext waitStrategyContext = new WaitStrategies.WaitStrategyContext();
+                            WaitStrategy waitStrategy = WaitStrategies.randomWait(1, TimeUnit.SECONDS, 10, TimeUnit.MINUTES);
+                            retry.setNextTriggerAt(waitStrategy.computeTriggerTime(waitStrategyContext));
+                            retry.setDeleted(0L);
+                            retryList.add(retry);
+                        }
+                        retryMapper.updateBatchNextTriggerAndStatusAtById(retryList);
+                    }, 0);
+                } finally {
+                    lockProvider.unlock();
+                }
+            });
+
+            thread.start();
+
+            return 0;
+        } else {
+            Retry retry = new Retry();
+            retry.setUpdateDt(LocalDateTime.now());
+            retry.setRetryStatus(requestVO.getStatus());
+            LambdaUpdateWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaUpdateWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
+            return retryAccess.update(retry, retryLambdaUpdateWrapper);
+        }
     }
 
     @Override

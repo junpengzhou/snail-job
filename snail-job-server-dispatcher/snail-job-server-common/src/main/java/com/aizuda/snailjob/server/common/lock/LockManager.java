@@ -21,6 +21,10 @@ public final class LockManager {
         LOCK_CONFIG.set(new LockConfig());
     }
 
+    public static void initialize(LockConfig lockConfig) {
+        LOCK_CONFIG.set(lockConfig);
+    }
+
     public static void clear() {
         LOCK_CONFIG.remove();
     }

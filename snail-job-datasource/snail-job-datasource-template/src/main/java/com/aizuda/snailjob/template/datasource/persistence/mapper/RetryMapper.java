@@ -14,5 +14,7 @@ public interface RetryMapper extends BaseMapper<Retry> {
 
     int updateBatchNextTriggerAtById(@Param("list") List<Retry> list);
 
+    int updateBatchNextTriggerAndStatusAtById(@Param("list") List<Retry> list);
+
     List<DashboardRetryResponseDO> selectRetrySummaryList(@Param("ew") Wrapper<Retry> wrapper);
 }
