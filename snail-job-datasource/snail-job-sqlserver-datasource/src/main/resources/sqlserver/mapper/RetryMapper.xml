@@ -44,4 +44,20 @@
                 </foreach>
                 ) AS src ON target.id = src.id;
     </update>
+
+    <update id="updateBatchNextTriggerAndStatusAtById" parameterType="java.util.List">
+        UPDATE sj_retry
+           SET next_trigger_at = src.next_trigger_at,
+               retry_status = src.retry_status,
+               update_dt = CURRENT_TIMESTAMP
+          FROM sj_retry AS target
+                JOIN (
+                <foreach collection="list" item="item" index="index" separator="UNION ALL">
+                    SELECT
+                        #{item.id}              AS id,
+                        #{item.nextTriggerAt}   AS next_trigger_at,
+                        #{item.retryStatus}     AS retry_status
+                </foreach>
+                ) AS src ON target.id = src.id;
+    </update>
 </mapper>

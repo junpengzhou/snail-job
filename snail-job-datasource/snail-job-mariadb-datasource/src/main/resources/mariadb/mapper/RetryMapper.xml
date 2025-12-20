@@ -44,4 +44,19 @@
          WHERE rt.id = tt.id
     </update>
 
+    <update id="updateBatchNextTriggerAndStatusAtById" parameterType="java.util.List">
+        UPDATE sj_retry rt,
+               (
+                   <foreach collection="list" item="item" index="index" separator="UNION ALL">
+                       SELECT
+                           #{item.id}               AS id,
+                           #{item.nextTriggerAt}    AS next_trigger_at,
+                           #{item.retryStatus}      AS retry_status
+                   </foreach>
+               ) tt
+           SET rt.next_trigger_at = tt.next_trigger_at
+             , rt.retry_status = tt.retry_status
+         WHERE rt.id = tt.id
+    </update>
+
 </mapper>
