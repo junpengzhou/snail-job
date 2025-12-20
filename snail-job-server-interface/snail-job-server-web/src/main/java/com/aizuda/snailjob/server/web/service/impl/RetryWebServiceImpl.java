@@ -331,7 +331,7 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
                             retry.setUpdateDt(LocalDateTime.now());
                             retry.setRetryStatus(requestVO.getStatus());
                             WaitStrategies.WaitStrategyContext waitStrategyContext = new WaitStrategies.WaitStrategyContext();
-                            WaitStrategy waitStrategy = WaitStrategies.randomWait(1, TimeUnit.SECONDS, 10, TimeUnit.MINUTES);
+                            WaitStrategy waitStrategy = WaitStrategies.randomWait(1, TimeUnit.SECONDS, 1, TimeUnit.MINUTES);
                             retry.setNextTriggerAt(waitStrategy.computeTriggerTime(waitStrategyContext));
                             retry.setDeleted(0L);
                             retryList.add(retry);
