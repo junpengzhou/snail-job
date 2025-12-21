@@ -313,7 +313,7 @@ public class RetryWebServiceImpl extends AbstractRetryService implements RetryWe
         // 若恢复重试则需要重新计算下次触发时间
         if (RetryStatusEnum.RUNNING.getStatus().equals(requestVO.getStatus())) {
             LockConfig lockConfig = LockManager.getLockConfig();
-            PageDTO<Retry> pageDTO = new PageDTO<>(0, 1000);
+            PageDTO<Retry> pageDTO = new PageDTO<>(0, 1000, false);
             LambdaQueryWrapper<Retry> retryLambdaUpdateWrapper = buildQueryOrUpdateCondition(new LambdaQueryWrapper<>(), RetryQueryOrUpdateDTOConverter.INSTANCE.convert(requestVO));
             retryLambdaUpdateWrapper.select(Retry::getId);
             Thread thread = new Thread(() -> {
